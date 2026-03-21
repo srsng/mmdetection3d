@@ -7,10 +7,6 @@ import warnings
 from os import path as osp
 from setuptools import find_packages, setup
 
-import torch
-from torch.utils.cpp_extension import (BuildExtension, CppExtension,
-                                       CUDAExtension)
-
 
 def readme():
     with open('README.md', encoding='utf-8') as f:
@@ -33,6 +29,10 @@ def make_cuda_ext(name,
                   sources_cuda=[],
                   extra_args=[],
                   extra_include_path=[]):
+
+    import torch
+    from torch.utils.cpp_extension import (BuildExtension, CppExtension,
+                                           CUDAExtension)
 
     define_macros = []
     extra_compile_args = {'cxx': [] + extra_args}
@@ -223,5 +223,4 @@ if __name__ == '__main__':
             'mim': parse_requirements('requirements/mminstall.txt'),
         },
         ext_modules=[],
-        cmdclass={'build_ext': BuildExtension},
         zip_safe=False)
