@@ -1,23 +1,13 @@
-dataset_type = 'SUNRGBDDataset'
-data_root = 'data2/sunrgbd/'
-class_names = ('bed', 'table', 'sofa', 'chair', 'toilet', 'desk', 'dresser',
-               'night_stand', 'bookshelf', 'bathtub')
+# MiniSUNRGBD dataset config for 3D detection
+# Based on sunrgbd-3d.py, modified for 8-class desktop objects detection
+
+dataset_type = 'MiniSUNRGBDDataset'
+data_root = 'data2/mini_sunrgbd/'
+class_names = ('keyboard', 'laptop', 'book', 'cup', 'mug',
+               'pen', 'notebook', 'phone')
 
 metainfo = dict(classes=class_names)
 
-# Example to use different file client
-# Method 1: simply set the data root and let the file I/O module
-# automatically infer from prefix (not support LMDB and Memcache yet)
-
-# data_root = 's3://openmmlab/datasets/detection3d/sunrgbd/'
-
-# Method 2: Use backend_args, file_client_args in versions before 1.1.0
-# backend_args = dict(
-#     backend='petrel',
-#     path_mapping=dict({
-#         './data/': 's3://openmmlab/datasets/detection3d/',
-#          'data/': 's3://openmmlab/datasets/detection3d/'
-#      }))
 backend_args = None
 
 train_pipeline = [
@@ -83,12 +73,11 @@ train_dataloader = dict(
         dataset=dict(
             type=dataset_type,
             data_root=data_root,
-            ann_file='sunrgbd_infos_train.pkl',
+            ann_file='mini_sunrgbd_infos_train.pkl',
+            data_prefix=dict(pts='points'),
             pipeline=train_pipeline,
             filter_empty_gt=False,
             metainfo=metainfo,
-            # we use box_type_3d='LiDAR' in kitti and nuscenes dataset
-            # and box_type_3d='Depth' in sunrgbd and scannet dataset.
             box_type_3d='Depth',
             backend_args=backend_args)))
 
@@ -99,7 +88,8 @@ val_dataloader = dict(
     dataset=dict(
         type=dataset_type,
         data_root=data_root,
-        ann_file='sunrgbd_infos_val.pkl',
+        ann_file='mini_sunrgbd_infos_val.pkl',
+        data_prefix=dict(pts='points'),
         pipeline=test_pipeline,
         metainfo=metainfo,
         test_mode=True,
@@ -112,7 +102,8 @@ test_dataloader = dict(
     dataset=dict(
         type=dataset_type,
         data_root=data_root,
-        ann_file='sunrgbd_infos_val.pkl',
+        ann_file='mini_sunrgbd_infos_val.pkl',
+        data_prefix=dict(pts='points'),
         pipeline=test_pipeline,
         metainfo=metainfo,
         test_mode=True,

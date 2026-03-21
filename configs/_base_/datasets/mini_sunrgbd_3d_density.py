@@ -1,34 +1,27 @@
-dataset_type = 'SUNRGBDDataset'
-data_root = 'data2/sunrgbd/'
-class_names = ('bed', 'table', 'sofa', 'chair', 'toilet', 'desk', 'dresser',
-               'night_stand', 'bookshelf', 'bathtub')
+# MiniSUNRGBD dataset config with density computation
+# 添加密度计算到数据管道
+
+dataset_type = 'MiniSUNRGBDDataset'
+data_root = 'data/mini_sunrgbd/'
+class_names = ('keyboard', 'laptop', 'book', 'cup', 'mug',
+               'pen', 'notebook', 'phone')
 
 metainfo = dict(classes=class_names)
 
-# Example to use different file client
-# Method 1: simply set the data root and let the file I/O module
-# automatically infer from prefix (not support LMDB and Memcache yet)
-
-# data_root = 's3://openmmlab/datasets/detection3d/sunrgbd/'
-
-# Method 2: Use backend_args, file_client_args in versions before 1.1.0
-# backend_args = dict(
-#     backend='petrel',
-#     path_mapping=dict({
-#         './data/': 's3://openmmlab/datasets/detection3d/',
-#          'data/': 's3://openmmlab/datasets/detection3d/'
-#      }))
 backend_args = None
 
+# 训练管道：添加密度计算
 train_pipeline = [
     dict(
         type='LoadPointsFromFile',
         coord_type='DEPTH',
-        shift_height=True,
+        shift_height=False,  # 密度融合不需要height维度
         load_dim=6,
-        use_dim=[0, 1, 2],
+        use_dim=[0, 1, 2],  # 只使用 xyz
         backend_args=backend_args),
     dict(type='LoadAnnotations3D'),
+    # 计算密度并添加到点云 (xyz -> xyzd)
+    dict(type='ComputeDensity', method='knn', k=16, normalize=True),
     dict(
         type='RandomFlip3D',
         sync_2d=False,
@@ -38,20 +31,23 @@ train_pipeline = [
         type='GlobalRotScaleTrans',
         rot_range=[-0.523599, 0.523599],
         scale_ratio_range=[0.85, 1.15],
-        shift_height=True),
+        shift_height=False),
     dict(type='PointSample', num_points=20000),
     dict(
         type='Pack3DDetInputs',
         keys=['points', 'gt_bboxes_3d', 'gt_labels_3d'])
 ]
+
 test_pipeline = [
     dict(
         type='LoadPointsFromFile',
         coord_type='DEPTH',
-        shift_height=True,
+        shift_height=False,  # 密度融合不需要height维度
         load_dim=6,
         use_dim=[0, 1, 2],
         backend_args=backend_args),
+    # 计算密度
+    dict(type='ComputeDensity', method='knn', k=16, normalize=True),
     dict(
         type='MultiScaleFlipAug3D',
         img_scale=(1333, 800),
@@ -78,19 +74,14 @@ train_dataloader = dict(
     num_workers=4,
     sampler=dict(type='DefaultSampler', shuffle=True),
     dataset=dict(
-        type='RepeatDataset',
-        times=5,
-        dataset=dict(
-            type=dataset_type,
-            data_root=data_root,
-            ann_file='sunrgbd_infos_train.pkl',
-            pipeline=train_pipeline,
-            filter_empty_gt=False,
-            metainfo=metainfo,
-            # we use box_type_3d='LiDAR' in kitti and nuscenes dataset
-            # and box_type_3d='Depth' in sunrgbd and scannet dataset.
-            box_type_3d='Depth',
-            backend_args=backend_args)))
+        type=dataset_type,
+        data_root=data_root,
+        ann_file='mini_sunrgbd_infos_train.pkl',
+        pipeline=train_pipeline,
+        filter_empty_gt=False,
+        metainfo=metainfo,
+        box_type_3d='Depth',
+        backend_args=backend_args))
 
 val_dataloader = dict(
     batch_size=1,
@@ -99,25 +90,13 @@ val_dataloader = dict(
     dataset=dict(
         type=dataset_type,
         data_root=data_root,
-        ann_file='sunrgbd_infos_val.pkl',
+        ann_file='mini_sunrgbd_infos_val.pkl',
         pipeline=test_pipeline,
         metainfo=metainfo,
         test_mode=True,
         box_type_3d='Depth',
         backend_args=backend_args))
-test_dataloader = dict(
-    batch_size=1,
-    num_workers=1,
-    sampler=dict(type='DefaultSampler', shuffle=False),
-    dataset=dict(
-        type=dataset_type,
-        data_root=data_root,
-        ann_file='sunrgbd_infos_val.pkl',
-        pipeline=test_pipeline,
-        metainfo=metainfo,
-        test_mode=True,
-        box_type_3d='Depth',
-        backend_args=backend_args))
+test_dataloader = val_dataloader
 val_evaluator = dict(type='IndoorMetric')
 test_evaluator = val_evaluator
 
