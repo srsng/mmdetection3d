@@ -1,14 +1,14 @@
-# Copyright (c) OpenMMLab. All rights reserved.
-"""Convert SUNRGBD to MiniSUNRGBD dataset for desktop objects detection.
+"""将 SUNRGBD 数据集转换为 MiniSUNRGBD 数据集，用于桌面物体检测。
 
-MiniSUNRGBD is a subset of SUNRGBD containing 8 desktop object classes:
+MiniSUNRGBD 是 SUNRGBD 的子集，包含 8 个桌面物体类别：
 keyboard, laptop, book, cup, mug, pen, notebook, phone
 
-This converter:
-1. Loads MiniSUNRGBD.json to get target classes and sample IDs
-2. Re-indexes classes to 0-7 for MiniSUNRGBD
-3. Optionally adds negative samples from "_" config (ratio of positive samples)
-4. Generates pkl with new label indices
+此转换器：
+1. 加载 MiniSUNRGBD.json 获取目标类别和样本 ID
+2. 将类别重新索引为 0-7 用于 MiniSUNRGBD
+3. 可选地从 "_" 配置添加负样本（基于正样本比例）
+4. 生成带有新标签索引的 pkl 文件
+5. 从实际 bbox 标注计算 mean_sizes
 """
 
 import argparse
@@ -24,21 +24,24 @@ from collections import defaultdict
 import mmengine
 import numpy as np
 
-# MiniSUNRGBD class order (must match dataset METAINFO)
+# MiniSUNRGBD 类别顺序（必须与数据集 METAINFO 匹配）
 MINI_SUNRGBD_CLASSES = set(['keyboard', 'laptop', 'book', 'cup', 'mug',
                          'pen', 'notebook', 'phone'])
 MINI_CLASS_TO_LABEL = {c: i for i, c in enumerate(MINI_SUNRGBD_CLASSES)}
 
+# 类别名到 mean_size 索引的映射（用于输出）
+CLASS_TO_MEAN_SIZE_IDX = {c: i for i, c in enumerate(sorted(MINI_SUNRGBD_CLASSES))}
+
 
 def parse_sunrgbd_label_line(line: str) -> dict:
-    """Parse a single line from SUNRGBD label file.
+    """解析 SUNRGBD label 文件的单行数据。
 
-    Label format:
+    标签格式：
     classname xmin ymin xmax ymax centroid_x centroid_y centroid_z \
         width length height orientation_x orientation_y
 
-    Returns:
-        dict with parsed fields, or None if parsing fails
+    返回:
+        解析后的字段字典，解析失败返回 None
     """
     parts = line.strip().split()
     if len(parts) < 13:
@@ -50,7 +53,7 @@ def parse_sunrgbd_label_line(line: str) -> dict:
         return None
 
     # heading_angle = arctan2(orientation_y, orientation_x) = arctan2(data[11], data[10])
-    # but some lines may have different format, use safe access
+    # 但某些行格式可能不同，使用安全访问方式
     if len(data) >= 12:
         heading_angle = np.arctan2(data[11], data[10])
     elif len(data) >= 11:
@@ -156,19 +159,45 @@ def copy_mini_sunrgbd_files(src_root: Path, dst_root: Path, sample_ids: set) -> 
 
 
 def create_instance_dict(parsed: dict, label: int, classname: str) -> dict:
-    """Create instance dict with 3D bbox in [cx, cy, cz, l, w, h, angle] format."""
+    """创建实例字典，3D bbox 格式为 [cx, cy, cz, l, w, h, angle]。"""
+    size = parsed['size'].copy()
     box3d = np.concatenate([
         parsed['center'],      # cx, cy, cz
-        parsed['size'],        # l, w, h
+        size,                  # l, w, h
         np.array([parsed['heading_angle']])  # angle
     ])
     return {
         'bbox': parsed['bbox'],          # 2D bbox [x1, y1, x2, y2]
-        'bbox_label': label,             # 2D label (same as 3D for our purpose)
+        'bbox_label': label,             # 2D 标签（与 3D 相同）
         'bbox_3d': box3d.astype(np.float32),  # 3D bbox [cx, cy, cz, l, w, h, angle]
-        'bbox_label_3d': label,          # 3D label (MiniSUNRGBD index 0-7)
-        'class_name': classname,         # original class name
+        'bbox_label_3d': label,          # 3D 标签（MiniSUNRGBD 索引 0-7）
+        'class_name': classname,         # 原始类别名称
     }
+
+
+def compute_mean_sizes(class_sizes: dict) -> list:
+    """从收集的 bbox 尺寸计算每个类别的平均尺寸。
+
+    Args:
+        class_sizes: 字典，键为 class_name，值为 (l, w, h) 元组列表
+
+    Returns:
+        按类别排序的的平均尺寸列表 [l, w, h]
+    """
+    mean_sizes = []
+    for class_name in sorted(MINI_SUNRGBD_CLASSES):
+        sizes = class_sizes.get(class_name, [])
+        if len(sizes) > 0:
+            sizes_arr = np.array(sizes)
+            mean_l = float(sizes_arr[:, 0].mean())
+            mean_w = float(sizes_arr[:, 1].mean())
+            mean_h = float(sizes_arr[:, 2].mean())
+            mean_sizes.append([mean_l, mean_w, mean_h])
+            print(f"  {class_name}: {len(sizes)} samples, mean_size=[{mean_l:.3f}, {mean_w:.3f}, {mean_h:.3f}]")
+        else:
+            mean_sizes.append([0.0, 0.0, 0.0])
+            print(f"  {class_name}: no samples (using default [0,0,0])")
+    return mean_sizes
 
 
 def filter_mini_sunrgbd_infos(
@@ -178,34 +207,35 @@ def filter_mini_sunrgbd_infos(
     sample_limit: int = 50,
     min_samples: int = 18,
     negative_ratio: float = 0.15,
+    compute_stats: bool = True,
 ) -> dict:
-    """Filter MiniSUNRGBD subset from full SUNRGBD dataset.
+    """从完整 SUNRGBD 数据集中筛选 MiniSUNRGBD 子集。
 
     Args:
-        root_path: Root path of original SUNRGBD data.
-        mini_config_path: Path to MiniSUNRGBD.json config file.
-        output_dir: Output directory for filtered pkl files.
-        sample_limit: Maximum samples per class (default 50).
-        min_samples: Minimum samples threshold to keep a class (default 18).
-        negative_ratio: Ratio of negative samples from "_" config to add.
-            0 means no negative samples (default 0.15 = 15% of positive samples).
+        root_path: 原始 SUNRGBD 数据的根目录路径。
+        mini_config_path: MiniSUNRGBD.json 配置文件路径。
+        output_dir: 过滤后 pkl 文件的输出目录。
+        sample_limit: 每个类别的最大样本数（默认 50）。
+        min_samples: 保留类别的最小样本阈值（默认 18）。
+        negative_ratio: 从 "_" 配置添加负样本的比例。
+            0 表示不添加负样本（默认 0.15 = 正样本数量的 15%）。
 
     Returns:
-        Statistics dict with filtered dataset info.
+        包含过滤后数据集信息的统计字典。
     """
-    # Load MiniSUNRGBD config
+    # 加载 MiniSUNRGBD 配置
     with open(mini_config_path, 'r') as f:
         mini_config = json.load(f)
 
-    # Get underscore samples (non-relevant samples from SUNRGBD)
+    # 获取下划线样本（来自 SUNRGBD 的非目标样本）
     underscore_samples = set(mini_config.get('_', []))
-    print(f"Underscore samples from config: {len(underscore_samples)}")
+    print(f"下划线样本数量: {len(underscore_samples)}")
 
-    # Filter classes by minimum sample threshold (exclude "_" and other non-class entries)
+    # 按最小样本阈值过滤类别（排除 "_" 和其他非类别条目）
     valid_classes = {}
     excluded_classes = {}
     for class_name, sample_ids in mini_config.items():
-        # Skip "_" and other non-class entries
+        # 跳过 "_" 和其他非类别条目
         if class_name == '_' or class_name not in MINI_CLASS_TO_LABEL:
             continue
         if len(sample_ids) >= min_samples:
@@ -213,10 +243,10 @@ def filter_mini_sunrgbd_infos(
         else:
             excluded_classes[class_name] = len(sample_ids)
 
-    print(f"Valid classes ({len(valid_classes)}): {list(valid_classes.keys())}")
-    print(f"Excluded classes (< {min_samples}): {excluded_classes}")
+    print(f"有效类别 ({len(valid_classes)}): {list(valid_classes.keys())}")
+    print(f"排除的类别 (< {min_samples}): {excluded_classes}")
 
-    # Random sampling for large classes
+    # 对大类进行随机采样
     sampled_classes = {}
     for class_name, sample_ids in valid_classes.items():
         if len(sample_ids) > sample_limit:
@@ -227,7 +257,7 @@ def filter_mini_sunrgbd_infos(
             print(f"  {class_name}: {len(sample_ids)} (kept all)")
         sampled_classes[class_name] = sampled_ids
 
-    # Build sample_id to valid class_names mapping
+    # 构建 sample_id 到有效类别名的映射
     target_sample_ids = set()
     sample_to_classes = defaultdict(set)
     for class_name, sample_ids in sampled_classes.items():
@@ -235,9 +265,9 @@ def filter_mini_sunrgbd_infos(
             target_sample_ids.add(sid)
             sample_to_classes[sid].add(class_name)
 
-    print(f"\nTotal target samples: {len(target_sample_ids)}")
+    print(f"\n目标样本总数: {len(target_sample_ids)}")
 
-    # Statistics
+    # 统计信息
     stats = {
         'valid_classes': list(valid_classes.keys()),
         'excluded_classes': list(excluded_classes.keys()),
@@ -245,21 +275,24 @@ def filter_mini_sunrgbd_infos(
         'per_class_count': {c: len(v) for c, v in sampled_classes.items()},
     }
 
-    # Label file directory
+    # 收集每个类别的 bbox 尺寸用于计算 mean_sizes
+    class_bbox_sizes = defaultdict(list)
+
+    # 标签文件目录
     label_dir = osp.join(root_path, 'sunrgbd_trainval', 'label')
 
-    # Process train and val splits
+    # 处理 train 和 val 划分
     for split in ['train', 'val']:
         pkl_path = osp.join(root_path, f'sunrgbd_infos_{split}.pkl')
         if not osp.exists(pkl_path):
-            print(f"\nWarning: {pkl_path} not found, skipping")
+            print(f"\n警告: {pkl_path} 未找到，跳过")
             continue
 
-        print(f"\nProcessing {split} split...")
+        print(f"\n正在处理 {split} 划分...")
         with open(pkl_path, 'rb') as f:
             data = pickle.load(f)
 
-        # Separate target samples and potential negative samples
+        # 分离目标样本和潜在负样本
         target_infos = []
         negative_candidates = []
 
@@ -268,7 +301,7 @@ def filter_mini_sunrgbd_infos(
             sample_idx = osp.splitext(osp.basename(lidar_path))[0]
 
             if sample_idx in target_sample_ids:
-                # This is a target sample - parse label file for instances
+                # 这是目标样本 - 解析标签文件获取实例
                 valid_class_names = sample_to_classes[sample_idx]
                 label_file = osp.join(label_dir, f'{sample_idx}.txt')
 
@@ -284,17 +317,20 @@ def filter_mini_sunrgbd_infos(
                         if parsed['classname'] in valid_class_names:
                             label = MINI_CLASS_TO_LABEL[parsed['classname']]
                             instances.append(create_instance_dict(parsed, label, parsed['classname']))
+                            # 收集 bbox 尺寸用于计算 mean_sizes
+                            size = parsed['size'].copy()
+                            class_bbox_sizes[parsed['classname']].append(size)
 
-                # Only keep samples with at least one valid instance
+                # 只保留至少有一个有效实例的样本
                 if len(instances) > 0:
                     info_copy = info.copy()
                     info_copy['instances'] = instances
                     target_infos.append(info_copy)
             else:
-                # Potential negative sample
+                # 潜在负样本
                 negative_candidates.append(info)
 
-        # Add negative samples from underscore config
+        # 从下划线配置添加负样本
         selected_negative = []
         if negative_ratio > 0 and underscore_samples:
             num_negative = int(len(target_infos) * negative_ratio)
@@ -304,33 +340,33 @@ def filter_mini_sunrgbd_infos(
                 sample_idx = osp.splitext(osp.basename(lidar_path))[0]
                 if sample_idx in underscore_samples:
                     info_copy = info.copy()
-                    info_copy['instances'] = []  # Empty instances for negative sample
+                    info_copy['instances'] = []  # 负样本的空实例
                     selected_negative.append(info_copy)
 
-            print(f"  Underscore samples found: {len(selected_negative)}")
-            print(f"  Requested negative samples: {num_negative}")
+            print(f"  找到的下划线样本: {len(selected_negative)}")
+            print(f"  请求的负样本数: {num_negative}")
 
-            # Random select if too many
+            # 如果太多则随机选择
             if len(selected_negative) > num_negative:
                 selected_negative = random.sample(selected_negative, num_negative)
         elif negative_ratio == 0:
-            print("  negative_ratio=0, no negative samples added")
+            print("  negative_ratio=0，不添加负样本")
 
         filtered_data_list = target_infos + selected_negative
         random.shuffle(filtered_data_list)
 
-        print(f"  Target samples: {len(target_infos)}")
-        print(f"  Negative samples: {len(selected_negative)}")
-        print(f"  Total: {len(filtered_data_list)}")
+        print(f"  目标样本: {len(target_infos)}")
+        print(f"  负样本: {len(selected_negative)}")
+        print(f"  总计: {len(filtered_data_list)}")
 
-        # Count instances per class
+        # 统计每个类别的实例数
         class_counts = defaultdict(int)
         for info in filtered_data_list:
             for inst in info.get('instances', []):
                 class_counts[inst['class_name']] += 1
-        print(f"  Instances per class: {dict(class_counts)}")
+        print(f"  每个类别的实例数: {dict(class_counts)}")
 
-        # Create output data
+        # 创建输出数据
         output_data = {
             'metainfo': {
                 'categories': MINI_CLASS_TO_LABEL,
@@ -340,68 +376,86 @@ def filter_mini_sunrgbd_infos(
             'data_list': filtered_data_list,
         }
 
-        # Save filtered pkl
+        # 保存过滤后的 pkl
         output_path = osp.join(output_dir, f'mini_sunrgbd_infos_{split}.pkl')
         mmengine.mkdir_or_exist(output_dir)
         with open(output_path, 'wb') as f:
             pickle.dump(output_data, f)
-        print(f"  Saved to: {output_path}")
+        print(f"  保存至: {output_path}")
+
+    # 从收集的 bbox 尺寸计算 mean_sizes
+    if compute_stats:
+        print("\n" + "=" * 60)
+        print("从标注计算 mean_sizes:")
+        mean_sizes = compute_mean_sizes(class_bbox_sizes)
+        stats['mean_sizes'] = mean_sizes
+
+        # 保存 mean_sizes 到 JSON 文件以便参考
+        mean_sizes_path = osp.join(output_dir, 'mean_sizes.json')
+        with open(mean_sizes_path, 'w') as f:
+            json.dump({
+                'mean_sizes': mean_sizes,
+                'class_order': sorted(MINI_SUNRGBD_CLASSES),
+                'per_class_sample_count': {c: len(v) for c, v in class_bbox_sizes.items()}
+            }, f, indent=2)
+        print(f"Mean sizes 已保存至: {mean_sizes_path}")
+        print("=" * 60)
 
     return stats
 
 
 def main():
-    parser = argparse.ArgumentParser(description='Convert SUNRGBD to MiniSUNRGBD')
+    parser = argparse.ArgumentParser(description='将 SUNRGBD 转换为 MiniSUNRGBD')
     parser.add_argument(
         '--root-path',
         type=str,
         default='./data2/sunrgbd',
-        help='Root path of original SUNRGBD data',
+        help='原始 SUNRGBD 数据的根目录',
     )
     parser.add_argument(
         '--mini-config',
         type=str,
         default='./data2/mini_sunrgbd/MiniSUNRGBD.json',
-        help='Path to MiniSUNRGBD.json config',
+        help='MiniSUNRGBD.json 配置文件路径',
     )
     parser.add_argument(
         '--out-dir',
         type=str,
         default='./data2/mini_sunrgbd',
-        help='Output directory',
+        help='输出目录',
     )
     parser.add_argument(
         '--sample-limit',
         type=int,
         default=50,
-        help='Maximum samples per class',
+        help='每个类别的最大样本数',
     )
     parser.add_argument(
         '--min-samples',
         type=int,
         default=18,
-        help='Minimum samples threshold to keep a class',
+        help='保留类别的最小样本阈值',
     )
     parser.add_argument(
         '--negative-ratio',
         type=float,
         default=0.15,
-        help='Ratio of negative samples from "_" config (default 0.15 = 15%% of positive samples, 0 = no negatives)',
+        help='从 "_" 配置添加负样本的比例（默认 0.15 = 正样本的 15%%，0 = 不添加负样本）',
     )
     args = parser.parse_args()
 
-    # Expand user path
+    # 扩展用户路径
     mini_config = osp.expanduser(args.mini_config)
 
     print("=" * 60)
-    print("MiniSUNRGBD Dataset Converter")
+    print("MiniSUNRGBD 数据集转换器")
     print("=" * 60)
-    print(f"Root path: {args.root_path}")
-    print(f"Mini config: {mini_config}")
-    print(f"Output dir: {args.out_dir}")
-    print(f"Sample limit: {args.sample_limit}")
-    print(f"Min samples: {args.min_samples}")
-    print(f"Negative ratio: {args.negative_ratio}")
+    print(f"根目录: {args.root_path}")
+    print(f"Mini 配置: {mini_config}")
+    print(f"输出目录: {args.out_dir}")
+    print(f"样本上限: {args.sample_limit}")
+    print(f"最小样本数: {args.min_samples}")
+    print(f"负样本比例: {args.negative_ratio}")
     print("=" * 60)
     
     assert Path(args.root_path).exists(), "SUN RGBD 数据集为找到"
@@ -443,10 +497,10 @@ def main():
     )
 
     print("\n" + "=" * 60)
-    print("Conversion Complete!")
-    print(f"Valid classes: {stats['valid_classes']}")
-    print(f"Total target samples: {stats['total_target_samples']}")
-    print(f"Per-class counts: {stats['per_class_count']}")
+    print("转换完成！")
+    print(f"有效类别: {stats['valid_classes']}")
+    print(f"目标样本总数: {stats['total_target_samples']}")
+    print(f"每类别计数: {stats['per_class_count']}")
     print("=" * 60)
 
 

@@ -18,16 +18,16 @@ model = dict(
             with_rot=True,
             # Mean sizes for 8 MiniSUNRGBD classes
             # Format: [length, width, height] in meters
-            # Based on typical desktop object dimensions
+            # Based on actual computed mean_sizes from the dataset
             mean_sizes=[
-                [0.60, 0.20, 0.04],   # keyboard - 60cm x 20cm x 4cm
-                [0.35, 0.25, 0.02],   # laptop - 35cm x 25cm x 2cm
-                [0.25, 0.18, 0.03],   # book - 25cm x 18cm x 3cm
-                [0.08, 0.08, 0.12],   # cup - 8cm diameter x 12cm height
-                [0.10, 0.10, 0.12],   # mug - 10cm diameter x 12cm height
-                [0.14, 0.015, 0.015], # pen - 14cm x 1.5cm x 1.5cm
-                [0.30, 0.21, 0.03],   # notebook - 30cm x 21cm x 3cm
-                [0.15, 0.08, 0.008],  # phone - 15cm x 8cm x 0.8cm
+                [0.128, 0.215, 0.184],    # keyboard
+                [0.215, 0.349, -0.093],   # laptop
+                [0.114, 0.242, 0.032],    # book
+                [0.154, 0.131, -0.219],   # cup
+                [0.141, 0.136, -0.325],   # mug
+                [0.064, 0.093, 0.076],    # pen
+                [0.181, 0.276, -0.265],   # notebook
+                [0.175, 0.244, -0.203],   # phone
             ]),
     ))
 
