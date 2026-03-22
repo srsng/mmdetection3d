@@ -32,6 +32,13 @@ MINI_CLASS_TO_LABEL = {c: i for i, c in enumerate(MINI_SUNRGBD_CLASSES)}
 # 类别名到 mean_size 索引的映射（用于输出）
 CLASS_TO_MEAN_SIZE_IDX = {c: i for i, c in enumerate(sorted(MINI_SUNRGBD_CLASSES))}
 
+# 固定随机种子，确保每次转换结果一致
+RANDOM_SEED = 42
+
+def set_random_seed(seed: int = 42) -> None:
+    """设置所有随机种子以确保可重复性。"""
+    random.seed(seed)
+    np.random.seed(seed)
 
 def parse_sunrgbd_label_line(line: str) -> dict:
     """解析 SUNRGBD label 文件的单行数据。
@@ -65,7 +72,7 @@ def parse_sunrgbd_label_line(line: str) -> dict:
         'classname': parts[0],
         'bbox': np.array([data[0], data[1], data[0] + data[3], data[2] + data[4]]),  # x1, y1, x2, y2
         'center': np.array([data[4], data[5], data[6]]),  # cx, cy, cz
-        'size': np.array([data[9], data[8], data[10]]) * 2,  # length, width, height (x_size, y_size, z_size)
+        'size': np.array([data[8], data[7], data[9]]) * 2,  # length, width, height (x_size, y_size, z_size)
         'heading_angle': heading_angle,
     }
 
@@ -459,6 +466,9 @@ def main():
     print("=" * 60)
     
     assert Path(args.root_path).exists(), "SUN RGBD 数据集为找到"
+
+    # 设置随机种子，确保可重复性
+    set_random_seed(RANDOM_SEED)
 
     # 加载配置获取所有样本ID（包括underscore）
     with open(mini_config, 'r') as f:

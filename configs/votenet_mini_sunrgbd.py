@@ -18,16 +18,16 @@ model = dict(
             with_rot=True,
             # Mean sizes for 8 MiniSUNRGBD classes
             # Format: [length, width, height] in meters
-            # Based on actual computed mean_sizes from the dataset
+            # Corrected: [l, w, h] from actual computed mean_sizes
             mean_sizes=[
-                [0.103, 0.210, 0.234],    # keyboard (0)
-                [0.222, 0.334, 0.382],    # laptop (1)
-                [0.099, 0.266, 0.236],    # book (2)
-                [0.159, 0.130, 0.041],    # cup (3)
-                [0.140, 0.143, -0.403],   # mug (4)
-                [0.064, 0.093, 0.076],    # pen (5)
-                [0.181, 0.276, -0.265],   # notebook (6)
-                [0.175, 0.244, -0.203],   # phone (7)
+                [0.221, 0.504, 0.125],    # keyboard (0)
+                [0.369, 0.418, 0.238],    # laptop (1)
+                [0.258, 0.281, 0.098],    # book (2)
+                [0.133, 0.134, 0.158],    # cup (3)
+                [0.122, 0.119, 0.137],    # mug (4)
+                [0.093, 0.137, 0.064],    # pen (5)
+                [0.276, 0.290, 0.181],    # notebook (6)
+                [0.244, 0.308, 0.175],    # phone (7)
             ]),
     ))
 
