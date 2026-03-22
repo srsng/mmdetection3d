@@ -20,16 +20,23 @@ model = dict(
             # Format: [length, width, height] in meters
             # Based on actual computed mean_sizes from the dataset
             mean_sizes=[
-                [0.128, 0.215, 0.184],    # keyboard
-                [0.215, 0.349, -0.093],   # laptop
-                [0.114, 0.242, 0.032],    # book
-                [0.154, 0.131, -0.219],   # cup
-                [0.141, 0.136, -0.325],   # mug
-                [0.064, 0.093, 0.076],    # pen
-                [0.181, 0.276, -0.265],   # notebook
-                [0.175, 0.244, -0.203],   # phone
+                [0.103, 0.210, 0.234],    # keyboard (0)
+                [0.222, 0.334, 0.382],    # laptop (1)
+                [0.099, 0.266, 0.236],    # book (2)
+                [0.159, 0.130, 0.041],    # cup (3)
+                [0.140, 0.143, -0.403],   # mug (4)
+                [0.064, 0.093, 0.076],    # pen (5)
+                [0.181, 0.276, -0.265],   # notebook (6)
+                [0.175, 0.244, -0.203],   # phone (7)
             ]),
     ))
 
 # Auto scale LR for smaller dataset
 auto_scale_lr = dict(enable=True, base_batch_size=128)
+
+vis_backends = [
+    dict(type='LocalVisBackend'),
+    dict(type='TensorboardVisBackend')
+]
+visualizer = dict(
+    type='Det3DLocalVisualizer', vis_backends=vis_backends, name='visualizer')

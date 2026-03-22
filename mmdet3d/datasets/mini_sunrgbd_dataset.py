@@ -35,6 +35,82 @@ class MiniSUNRGBDDataset(Det3DDataset):
         ]
     }
 
+    def __init__(self,
+                 data_root: str,
+                 ann_file: str,
+                 metainfo: dict = None,
+                 data_prefix: dict = dict(
+                     pts='points', img='sunrgbd_trainval/image'),
+                 pipeline: list = [],
+                 default_cam_key: str = 'CAM0',
+                 modality: dict = dict(use_camera=True, use_lidar=True),
+                 box_type_3d: str = 'Depth',
+                 filter_empty_gt: bool = True,
+                 test_mode: bool = False,
+                 **kwargs) -> None:
+        super().__init__(
+            data_root=data_root,
+            ann_file=ann_file,
+            metainfo=metainfo,
+            data_prefix=data_prefix,
+            pipeline=pipeline,
+            default_cam_key=default_cam_key,
+            modality=modality,
+            box_type_3d=box_type_3d,
+            filter_empty_gt=filter_empty_gt,
+            test_mode=test_mode,
+            **kwargs)
+        assert 'use_camera' in self.modality and \
+            'use_lidar' in self.modality
+        assert self.modality['use_camera'] or self.modality['use_lidar']
+
+    def parse_data_info(self, info: dict) -> dict:
+        """Process the raw data info.
+
+        Convert all relative path of needed modality data file to
+        the absolute path. And process
+        the `instances` field to `ann_info` in training stage.
+
+        Args:
+            info (dict): Raw info dict.
+
+        Returns:
+            dict: Has `ann_info` in training stage. And
+            all path has been converted to absolute path.
+        """
+
+        if self.modality['use_lidar']:
+            import os.path as osp
+            # Check if it already has points prefix
+            lidar_path = info['lidar_points']['lidar_path']
+            pts_prefix = self.data_prefix.get('pts', '')
+            if pts_prefix and not lidar_path.startswith(pts_prefix):
+                info['lidar_points']['lidar_path'] = \
+                    osp.join(pts_prefix, lidar_path)
+
+        if self.modality['use_camera']:
+            import os.path as osp
+            for cam_id, img_info in info['images'].items():
+                if 'img_path' in img_info:
+                    img_path = img_info['img_path']
+                    img_prefix = self.data_prefix.get('img', '')
+                    if img_prefix and not img_path.startswith(img_prefix):
+                        img_info['img_path'] = osp.join(img_prefix, img_path)
+            if self.default_cam_key is not None:
+                info['img_path'] = info['images'][
+                    self.default_cam_key]['img_path']
+                info['depth2img'] = np.array(
+                    info['images'][self.default_cam_key]['depth2img'],
+                    dtype=np.float32)
+
+        if not self.test_mode:
+            # used in traing
+            info['ann_info'] = self.parse_ann_info(info)
+        if self.test_mode and self.load_eval_anns:
+            info['eval_ann_info'] = self.parse_ann_info(info)
+
+        return info
+
     def parse_ann_info(self, info: dict) -> dict:
         """Process the `instances` in data info to `ann_info`.
 

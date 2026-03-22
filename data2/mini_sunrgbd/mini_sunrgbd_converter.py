@@ -64,8 +64,8 @@ def parse_sunrgbd_label_line(line: str) -> dict:
     return {
         'classname': parts[0],
         'bbox': np.array([data[0], data[1], data[0] + data[3], data[2] + data[4]]),  # x1, y1, x2, y2
-        'center': np.array([data[5], data[6], data[7]]),  # cx, cy, cz
-        'size': np.array([data[9], data[8], data[10]]) * 2,  # l, w, h (x_size, y_size, z_size)
+        'center': np.array([data[4], data[5], data[6]]),  # cx, cy, cz
+        'size': np.array([data[9], data[8], data[10]]) * 2,  # length, width, height (x_size, y_size, z_size)
         'heading_angle': heading_angle,
     }
 

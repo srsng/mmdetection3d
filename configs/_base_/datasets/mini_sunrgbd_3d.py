@@ -64,8 +64,8 @@ test_pipeline = [
 ]
 
 train_dataloader = dict(
-    batch_size=16,
-    num_workers=4,
+    batch_size=8,
+    num_workers=2,
     sampler=dict(type='DefaultSampler', shuffle=True),
     dataset=dict(
         type='RepeatDataset',
