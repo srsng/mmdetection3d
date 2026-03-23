@@ -4,6 +4,12 @@ from os import path as osp
 
 from mmengine import print_log
 
+from pathlib import Path
+import sys
+
+# 添加父目录到路径
+sys.path.insert(0, str(Path(__file__).parent.parent))
+
 from tools.dataset_converters import indoor_converter as indoor
 from tools.dataset_converters import kitti_converter as kitti
 from tools.dataset_converters import lyft_converter as lyft_converter
