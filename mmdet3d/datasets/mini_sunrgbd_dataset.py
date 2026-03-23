@@ -21,17 +21,13 @@ class MiniSUNRGBDDataset(Det3DDataset):
     """
 
     METAINFO = {
-        'classes': ('keyboard', 'laptop', 'book', 'cup', 'mug',
-                    'pen', 'notebook', 'phone'),
+        'classes': ('keyboard', 'laptop', 'book', 'cup', 'mug'),
         'palette': [
             (230, 25, 72),    # keyboard - red
             (60, 180, 75),    # laptop - green
             (255, 225, 25),   # book - yellow
             (0, 130, 200),    # cup - blue
             (245, 130, 48),   # mug - orange
-            (145, 30, 180),   # pen - purple
-            (70, 240, 240),   # notebook - cyan
-            (240, 50, 230),   # phone - magenta
         ]
     }
 

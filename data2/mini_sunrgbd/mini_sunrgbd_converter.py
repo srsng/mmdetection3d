@@ -1,11 +1,11 @@
 """将 SUNRGBD 数据集转换为 MiniSUNRGBD 数据集，用于桌面物体检测。
 
-MiniSUNRGBD 是 SUNRGBD 的子集，包含 8 个桌面物体类别：
-keyboard, laptop, book, cup, mug, pen, notebook, phone
+MiniSUNRGBD 是 SUNRGBD 的子集，包含 5 个桌面物体类别（样本数 > 50）：
+keyboard, laptop, book, cup, mug
 
 此转换器：
 1. 加载 MiniSUNRGBD.json 获取目标类别和样本 ID
-2. 将类别重新索引为 0-7 用于 MiniSUNRGBD
+2. 将类别重新索引为 0-4 用于 MiniSUNRGBD
 3. 可选地从 "_" 配置添加负样本（基于正样本比例）
 4. 生成带有新标签索引的 pkl 文件
 5. 从实际 bbox 标注计算 mean_sizes
@@ -24,9 +24,8 @@ from collections import defaultdict
 import mmengine
 import numpy as np
 
-# MiniSUNRGBD 类别顺序（必须与数据集 METAINFO 匹配）
-MINI_SUNRGBD_CLASSES = set(['keyboard', 'laptop', 'book', 'cup', 'mug',
-                         'pen', 'notebook', 'phone'])
+# MiniSUNRGBD 类别顺序（只保留样本数 > 50 的类别）
+MINI_SUNRGBD_CLASSES = set(['keyboard', 'laptop', 'book', 'cup', 'mug'])
 MINI_CLASS_TO_LABEL = {c: i for i, c in enumerate(MINI_SUNRGBD_CLASSES)}
 
 # 类别名到 mean_size 索引的映射（用于输出）
@@ -145,7 +144,7 @@ def copy_mini_sunrgbd_files(src_root: Path, dst_root: Path, sample_ids: set) -> 
         for src_path, dst_path in files_to_copy:
             src = src_root / src_path.format(idx)
             dst = dst_root / dst_path.format(idx)
-            if dst.exists():
+            if not str(dst).endswith(".txt") and dst.exists():
                 stats['exist'] += 1
                 continue
             if src.exists():
@@ -434,13 +433,13 @@ def main():
     parser.add_argument(
         '--sample-limit',
         type=int,
-        default=50,
+        default=250,
         help='每个类别的最大样本数',
     )
     parser.add_argument(
         '--min-samples',
         type=int,
-        default=18,
+        default=50,
         help='保留类别的最小样本阈值',
     )
     parser.add_argument(

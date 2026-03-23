@@ -1,10 +1,9 @@
 # MiniSUNRGBD dataset config for 3D detection
-# Based on sunrgbd-3d.py, modified for 8-class desktop objects detection
+# Based on sunrgbd-3d.py, modified for 5-class desktop objects detection
 
 dataset_type = 'MiniSUNRGBDDataset'
 data_root = 'data2/mini_sunrgbd/'
-class_names = ('keyboard', 'laptop', 'book', 'cup', 'mug',
-               'pen', 'notebook', 'phone')
+class_names = ('keyboard', 'laptop', 'book', 'cup', 'mug')
 
 metainfo = dict(classes=class_names)
 
