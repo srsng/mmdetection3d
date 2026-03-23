@@ -1,5 +1,5 @@
 # VoteNet config for MiniSUNRGBD dataset - Finetune from SUNRGBD pretrained model
-# 8-class desktop objects detection
+# 5-class desktop objects detection (keyboard, laptop, book, cup, mug)
 # 只加载 backbone 预训练权重，bbox_head 保持随机初始化
 
 _base_ = [
@@ -14,7 +14,7 @@ pretrained = 'checkpoints/votenet/votenet_16x8_sunrgbd-3d-10class_20210820_16282
 # 加载预训练模型（用于权重迁移）
 load_from = pretrained
 
-# Model settings - 8 classes for MiniSUNRGBD
+# Model settings - 5 classes for MiniSUNRGBD
 model = dict(
     # Backbone 使用预训练权重
     backbone=dict(
@@ -22,22 +22,20 @@ model = dict(
     ),
     bbox_head=dict(
         type='VoteHead',
-        num_classes=8,
+        num_classes=5,
         bbox_coder=dict(
             type='PartialBinBasedBBoxCoder',
-            num_sizes=8,
+            num_sizes=5,
             num_dir_bins=12,
             with_rot=True,
-            # Corrected mean_sizes: [l, w, h]
+            # Mean sizes for 5 MiniSUNRGBD classes
+            # Format: [length, width, height] in meters
             mean_sizes=[
-                [0.221, 0.504, 0.125],    # keyboard (0)
-                [0.369, 0.418, 0.238],    # laptop (1)
-                [0.258, 0.281, 0.098],    # book (2)
-                [0.133, 0.134, 0.158],    # cup (3)
-                [0.122, 0.119, 0.137],    # mug (4)
-                [0.093, 0.137, 0.064],    # pen (5)
-                [0.276, 0.290, 0.181],    # notebook (6)
-                [0.244, 0.308, 0.175],    # phone (7)
+                [0.208, 0.504, 0.116],    # keyboard (0)
+                [0.357, 0.411, 0.228],    # laptop (1)
+                [0.255, 0.272, 0.112],    # book (2)
+                [0.130, 0.131, 0.152],    # cup (3)
+                [0.138, 0.128, 0.143],    # mug (4)
             ],
         ),
     ),
