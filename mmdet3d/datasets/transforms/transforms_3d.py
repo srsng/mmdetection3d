@@ -11,6 +11,7 @@ from mmcv.transforms import BaseTransform, Compose, RandomResize, Resize
 from mmdet.datasets.transforms import (PhotoMetricDistortion, RandomCrop,
                                        RandomFlip)
 from mmengine import is_list_of, is_tuple_of
+from sklearn.neighbors import BallTree
 
 from mmdet3d.models.task_modules import VoxelGenerator
 from mmdet3d.registry import TRANSFORMS
@@ -2682,4 +2683,92 @@ class LaserMix(BaseTransform):
         repr_str += f'pitch_angles={self.pitch_angles}, '
         repr_str += f'pre_transform={self.pre_transform}, '
         repr_str += f'prob={self.prob})'
+        return repr_str
+
+
+@TRANSFORMS.register_module()
+class ComputePointDensity(BaseTransform):
+    """Compute point cloud density using Gaussian kernel KDE.
+
+    This transform calculates the inverse density for each point using
+    k-nearest neighbors with Gaussian kernel, following the paper
+    "Point cloud 3D object detection method based on density
+    information-local feature fusion".
+
+    Required Keys:
+
+    - points (:obj:`BasePoints`)
+
+    Modified Keys:
+
+    - points (:obj:`BasePoints`)
+    - point_density (np.ndarray): Inverse density values
+
+    Args:
+        kernel (str): Kernel type for density estimation.
+            Defaults to 'gaussian'.
+        sigma (float): Sigma parameter for Gaussian kernel.
+            Defaults to 0.1.
+        k_neighbor (int): Number of nearest neighbors for KDE.
+            Defaults to 64.
+        epsilon (float): Small value to prevent division by zero.
+            Defaults to 1e-8.
+    """
+
+    def __init__(self,
+                 kernel: str = 'gaussian',
+                 sigma: float = 0.1,
+                 k_neighbor: int = 64,
+                 epsilon: float = 1e-8) -> None:
+        self.kernel = kernel
+        self.sigma = sigma
+        self.k_neighbor = k_neighbor
+        self.epsilon = epsilon
+
+    def transform(self, input_dict: dict) -> dict:
+        """Call function to compute point density.
+
+        Args:
+            input_dict (dict): Result dict from loading pipeline.
+
+        Returns:
+            dict: Results after density computation, 'point_density' key
+            is added and 'points' tensor is extended with density channel.
+        """
+        points = input_dict['points'].tensor[:, :3].numpy()
+        tree = BallTree(points, leaf_size=40)
+        distances, _ = tree.query(points, k=self.k_neighbor)
+
+        if self.kernel == 'gaussian':
+            kernel_vals = np.exp(
+                -(distances**2) / (2 * self.sigma**2)
+            ) / (np.sqrt(2 * np.pi) * self.sigma)
+            density = np.sum(kernel_vals, axis=1) / self.k_neighbor
+        else:
+            raise NotImplementedError(
+                f'Kernel {self.kernel} is not supported yet.')
+
+        # Compute inverse density
+        inv_density = 1.0 / (density + self.epsilon)
+        # Min-max normalization to [0, 1]
+        inv_density = (inv_density - inv_density.min()) / (
+            inv_density.max() - inv_density.min() + self.epsilon)
+
+        # Store density info
+        input_dict['point_density'] = inv_density.astype(np.float32)
+        # Append density to points tensor (ensure float32 for GPU ops)
+        input_dict['points'].tensor = torch.cat([
+            input_dict['points'].tensor,
+            torch.from_numpy(inv_density).unsqueeze(1)
+        ], dim=-1).float()
+
+        return input_dict
+
+    def __repr__(self) -> str:
+        """str: Return a string that describes the module."""
+        repr_str = self.__class__.__name__
+        repr_str += f'(kernel={self.kernel}, '
+        repr_str += f'sigma={self.sigma}, '
+        repr_str += f'k_neighbor={self.k_neighbor}, '
+        repr_str += f'epsilon={self.epsilon})'
         return repr_str

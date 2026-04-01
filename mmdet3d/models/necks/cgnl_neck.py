@@ -7,131 +7,144 @@ import torch
 import torch.nn as nn
 import torch.nn.functional as F
 
+from mmdet3d.registry import MODELS
 
+
+@MODELS.register_module()
 class CGNLBlock(nn.Module):
-    """紧凑广义非局部块。"""
+    """Compact Generalized Non-Local Block for channel-wise local feature modeling.
+
+    This block applies non-local attention with channel grouping and layer normalization
+    to model spatial correlations in point cloud features.
+
+    Args:
+        in_channels (int): Number of input channels.
+        groups (int): Number of channel groups for grouped convolution.
+            Defaults to 4.
+        reduction (int): Channel reduction ratio. Defaults to 4.
+        use_scale (bool): Whether to use scale factor in attention.
+            Defaults to True.
+    """
 
     def __init__(
         self,
         in_channels: int,
-        reduction: int = 2,
+        groups: int = 4,
+        reduction: int = 4,
         use_scale: bool = True,
-        groups: int = 1,
     ):
-        """
-        初始化 CGNL 块。
-
-        Args:
-            in_channels: 输入通道数
-            reduction: 通道缩减比例
-            use_scale: 是否使用缩放因子
-            groups: 分组卷积的组数
-        """
         super().__init__()
+        assert in_channels % groups == 0, (
+            f'in_channels ({in_channels}) must be divisible by groups ({groups})'
+        )
         self.in_channels = in_channels
+        self.groups = groups
         self.reduction = reduction
         self.use_scale = use_scale
-        self.groups = groups
-        self.inter_channels = max(in_channels // reduction, 1)
+        self.inter_channels = in_channels // reduction
+        assert self.inter_channels % groups == 0, (
+            f'inter_channels ({self.inter_channels}) must be divisible by groups ({groups})'
+        )
 
-        # 1x1 卷积用于降维
+        # Grouped 1x1 convolutions for theta, phi, g
         self.theta = nn.Conv1d(
-            in_channels, self.inter_channels, kernel_size=1, groups=groups
-        )
+            in_channels, self.inter_channels, kernel_size=1, groups=groups)
         self.phi = nn.Conv1d(
-            in_channels, self.inter_channels, kernel_size=1, groups=groups
-        )
+            in_channels, self.inter_channels, kernel_size=1, groups=groups)
         self.g = nn.Conv1d(
-            in_channels, self.inter_channels, kernel_size=1, groups=groups
-        )
+            in_channels, self.inter_channels, kernel_size=1, groups=groups)
 
-        # 1x1 卷积用于升维
+        # 1x1 convolution for output
         self.out_conv = nn.Conv1d(
-            self.inter_channels, in_channels, kernel_size=1, groups=groups
-        )
+            self.inter_channels, in_channels, kernel_size=1, groups=groups)
 
-        # 初始化
+        # LayerNorm for residual connection
+        self.ln = nn.LayerNorm(self.in_channels)
+
+        # Initialize
         nn.init.constant_(self.out_conv.weight, 0)
         nn.init.constant_(self.out_conv.bias, 0)
 
     def forward(self, x: torch.Tensor) -> torch.Tensor:
-        """
-        前向传播。
+        """Forward pass.
 
         Args:
-            x: 输入特征 (B, C, N)
+            x (torch.Tensor): Input features with shape (B, C, N).
 
         Returns:
-            输出特征 (B, C, N)
+            torch.Tensor: Output features with shape (B, C, N).
         """
         batch_size, channels, num_points = x.size()
 
-        # 计算 theta, phi, g
+        # Compute theta, phi, g
         theta_x = self.theta(x)  # (B, C', N)
         phi_x = self.phi(x)  # (B, C', N)
         g_x = self.g(x)  # (B, C', N)
 
-        # 计算注意力权重
+        # Compute attention weights: theta_phi = bmm(theta.permute(0,2,1), phi)
         theta_x = theta_x.permute(0, 2, 1)  # (B, N, C')
-        attention = torch.matmul(theta_x, phi_x)  # (B, N, N)
+        theta_phi = torch.bmm(theta_x, phi_x)  # (B, N, N)
 
         if self.use_scale:
-            attention = attention / (self.inter_channels**0.5)
+            theta_phi = theta_phi / (self.inter_channels**0.5)
 
-        attention = F.softmax(attention, dim=-1)
+        attention = F.softmax(theta_phi, dim=-1)
 
-        # 应用注意力
+        # Apply attention to g
         g_x = g_x.permute(0, 2, 1)  # (B, N, C')
-        out = torch.matmul(attention, g_x)  # (B, N, C')
+        out = torch.bmm(attention, g_x)  # (B, N, C')
         out = out.permute(0, 2, 1)  # (B, C', N)
 
-        # 升维并添加残差连接
+        # Upscale and apply residual connection with LayerNorm
         out = self.out_conv(out)
-        out = out + x
+        # LayerNorm on (B, N, C), then permute back to (B, C, N)
+        out = out + self.ln(out.permute(0, 2, 1)).permute(0, 2, 1)
 
         return out
 
 
+@MODELS.register_module()
 class CGNLNeck(nn.Module):
-    """CGNL Neck 模块，用于 MMDetection3D。"""
+    """CGNL Neck module for MMDetection3D.
+
+    Args:
+        in_channels (list[int]): List of input channels.
+        out_channels (list[int]): List of output channels.
+        num_blocks (int): Number of CGNL blocks per layer. Defaults to 1.
+        groups (int): Number of channel groups. Defaults to 4.
+        reduction (int): Channel reduction ratio. Defaults to 4.
+        use_scale (bool): Whether to use scale factor. Defaults to True.
+    """
 
     def __init__(
         self,
         in_channels: list[int],
         out_channels: list[int],
         num_blocks: int = 1,
-        reduction: int = 2,
+        groups: int = 4,
+        reduction: int = 4,
         use_scale: bool = True,
     ):
-        """
-        初始化 CGNL Neck。
-
-        Args:
-            in_channels: 输入通道数列表
-            out_channels: 输出通道数列表
-            num_blocks: CGNL 块数量
-            reduction: 通道缩减比例
-            use_scale: 是否使用缩放
-        """
         super().__init__()
         assert len(in_channels) == len(out_channels)
 
         self.in_channels = in_channels
         self.out_channels = out_channels
         self.num_blocks = num_blocks
+        self.groups = groups
 
-        # 为每个特征层创建 CGNL 块
+        # Create CGNL blocks for each feature layer
         self.cgnl_blocks = nn.ModuleList()
         self.adapt_convs = nn.ModuleList()
 
         for in_ch, out_ch in zip(in_channels, out_channels):
-            # CGNL 块序列
             blocks = nn.ModuleList(
-                [CGNLBlock(in_ch, reduction, use_scale) for _ in range(num_blocks)]
+                [CGNLBlock(in_ch, groups=groups, reduction=reduction, use_scale=use_scale)
+                 for _ in range(num_blocks)]
             )
             self.cgnl_blocks.append(blocks)
 
-            # 通道适配卷积
+            # Channel adaptation conv
             if in_ch != out_ch:
                 adapt_conv = nn.Conv1d(in_ch, out_ch, kernel_size=1)
             else:
@@ -163,17 +176,29 @@ class CGNLNeck(nn.Module):
         return outputs
 
 
+@MODELS.register_module()
 class VoteNetCGNLNeck(nn.Module):
-    """适配 VoteNet backbone 输出的 CGNL Neck。
+    """CGNL Neck adapted for VoteNet backbone output.
 
-    VoteNet 的 PointNet2SASSG backbone 输出字典格式:
+    VoteNet's PointNet2SASSG backbone outputs a dictionary format:
         {
-            'fp_xyz': [points_0, points_1, ...],  # 每层中心点坐标
-            'fp_features': [feats_0, feats_1, ...],  # 每层特征
+            'fp_xyz': [points_0, points_1, ...],
+            'fp_features': [feats_0, feats_1, ...],
             'fp_indices': [indices_0, indices_1, ...]
         }
 
-    根据论文，CGNL 应在最后一层上采样特征后使用，增强局部特征关联。
+    According to the paper, CGNL should be applied after the last upsampling
+    layer to enhance local feature correlation.
+
+    Args:
+        in_channels (int or list[int]): Input channels.
+        out_channels (int or list[int]): Output channels.
+        num_blocks (int): Number of CGNL blocks. Defaults to 1.
+        groups (int): Number of channel groups. Defaults to 4.
+        reduction (int): Channel reduction ratio. Defaults to 4.
+        use_scale (bool): Whether to use scale factor. Defaults to True.
+        target_layer_idx (int): Target feature layer index, -1 for last layer.
+            Defaults to -1.
     """
 
     def __init__(
@@ -181,25 +206,16 @@ class VoteNetCGNLNeck(nn.Module):
         in_channels: int | list[int],
         out_channels: int | list[int],
         num_blocks: int = 1,
-        reduction: int = 2,
+        groups: int = 4,
+        reduction: int = 4,
         use_scale: bool = True,
         target_layer_idx: int = -1,
     ):
-        """
-        初始化适配 VoteNet 的 CGNL Neck。
-
-        Args:
-            in_channels: 输入通道数（支持单通道或列表）
-            out_channels: 输出通道数（支持单通道或列表）
-            num_blocks: CGNL 块数量
-            reduction: 通道缩减比例
-            use_scale: 是否使用缩放
-            target_layer_idx: 目标特征层索引，-1 表示最后一层
-        """
         super().__init__()
         self.target_layer_idx = target_layer_idx
+        self.groups = groups
 
-        # 标准化为列表格式
+        # Normalize to list format
         if isinstance(in_channels, int):
             self.in_channels = [in_channels]
             self.out_channels = (
@@ -209,13 +225,14 @@ class VoteNetCGNLNeck(nn.Module):
             self.in_channels = in_channels
             self.out_channels = out_channels
 
-        # 创建 CGNL 块
+        # Create CGNL blocks
         self.cgnl_blocks = nn.ModuleList()
         self.adapt_convs = nn.ModuleList()
 
         for in_ch, out_ch in zip(self.in_channels, self.out_channels):
             blocks = nn.ModuleList(
-                [CGNLBlock(in_ch, reduction, use_scale) for _ in range(num_blocks)]
+                [CGNLBlock(in_ch, groups=groups, reduction=reduction, use_scale=use_scale)
+                 for _ in range(num_blocks)]
             )
             self.cgnl_blocks.append(blocks)
 
@@ -271,22 +288,125 @@ class VoteNetCGNLNeck(nn.Module):
         return {"fp_xyz": fp_xyz, "fp_features": outputs, "fp_indices": fp_indices}
 
 
-def register_cgnl_to_mmdet3d():
-    """将 CGNL Neck 注册到 MMDetection3D。"""
-    try:
-        from mmdet3d.registry import MODELS
+@MODELS.register_module()
+class CGNLLocalFusionNeck(nn.Module):
+    """CGNL Local Fusion Neck for point cloud feature enhancement.
 
-        @MODELS.register_module()
-        class CGNLNeckWrapper(CGNLNeck):
-            """MMDetection3D 兼容的标准 CGNL Neck 包装器。"""
+    This neck takes point cloud data with xyz + features (e.g., density-aware
+    features from DensityAwarePointNet2), applies CGNL attention to the feature
+    channels, and outputs in a format compatible with VoteHead.
 
-        @MODELS.register_module()
-        class VoteNetCGNLNeckWrapper(VoteNetCGNLNeck):
-            """MMDetection3D 兼容的 VoteNet 适配 CGNL Neck 包装器。"""
+    The input format is (B, N, 3+D) where:
+        B: batch size
+        N: number of points
+        3: xyz coordinates
+        D: additional feature channels (including density)
 
-        print("✓ CGNL Neck 已注册到 mmdet3d.registry.MODELS")
-        return True
+    Args:
+        in_channels (int): Number of input feature channels (excluding xyz).
+            Should match the feature dimension from backbone.
+        num_blocks (int): Number of CGNL blocks. Defaults to 1.
+        groups (int): Number of channel groups for CGNLBlock. Defaults to 1.
+            Set to 1 for flexible channel support.
+        reduction (int): Channel reduction ratio. Defaults to 4.
+        use_scale (bool): Whether to use scale factor. Defaults to True.
+    """
 
-    except ImportError:
-        print("警告：MMDetection3D 未安装，跳过注册")
-        return False
+    def __init__(
+        self,
+        in_channels: int,
+        num_blocks: int = 1,
+        groups: int = 4,
+        reduction: int = 4,
+        use_scale: bool = True,
+    ):
+        super().__init__()
+        self.in_channels = in_channels
+        self.num_blocks = num_blocks
+        self.groups = groups
+
+        # Create CGNL blocks for feature processing
+        self.cgnl_blocks = nn.ModuleList([
+            CGNLBlock(
+                in_channels=in_channels,
+                groups=groups,
+                reduction=reduction,
+                use_scale=use_scale,
+            ) for _ in range(num_blocks)
+        ])
+
+    def forward(
+        self,
+        inputs: dict[str, list[torch.Tensor]] | torch.Tensor
+    ) -> dict:
+        """Forward pass.
+
+        Args:
+            inputs: Either:
+                - VoteNet backbone输出的字典，格式为
+                  {"fp_xyz": [...], "fp_features": [...], "fp_indices": [...]}
+                - 或者tensor格式 (B, N, 3 + in_channels)
+
+        Returns:
+            dict: Output dictionary with keys:
+                - fp_xyz: list of xyz coordinates (one layer)
+                - fp_features: list of processed features (one layer)
+                - fp_indices: list of indices (one layer, identity)
+        """
+        # 处理 VoteNet 字典格式输入 (来自 backbone)
+        if isinstance(inputs, dict):
+            fp_xyz = inputs.get("fp_xyz", [])
+            fp_features = inputs.get("fp_features", [])
+            fp_indices = inputs.get("fp_indices", [])
+
+            if not fp_features:
+                raise ValueError("No features found in input")
+
+            # 只对最后一层应用 CGNL
+            target_idx = len(fp_features) - 1
+            x = fp_features[target_idx]  # (B, C, N)
+
+            # 应用 CGNL blocks
+            for block in self.cgnl_blocks:
+                x = block(x)
+
+            # 更新 features
+            fp_features = list(fp_features)
+            fp_features[target_idx] = x
+
+            return {
+                "fp_xyz": fp_xyz,
+                "fp_features": fp_features,
+                "fp_indices": fp_indices,
+            }
+
+        # 处理直接 tensor 输入 (B, N, 3 + in_channels)
+        points = inputs
+        batch_size, num_points = points.shape[:2]
+
+        # Separate xyz and features
+        xyz = points[..., :3]  # (B, N, 3)
+        features = points[..., 3:]  # (B, N, in_channels)
+
+        # Transpose for Conv1d: (B, N, C) -> (B, C, N)
+        features = features.permute(0, 2, 1).contiguous()  # (B, C, N)
+
+        # Apply CGNL blocks
+        for block in self.cgnl_blocks:
+            features = block(features)
+
+        # Keep (B, C, N) format for VoteHead compatibility
+        # Note: VoteHead._extract_input expects seed_features in (B, C, N) format
+
+        # Create identity indices for compatibility
+        indices = torch.arange(
+            num_points, device=points.device).unsqueeze(0).expand(
+                batch_size, -1).long()
+
+        # Return in VoteHead-compatible format
+        # fp_features in (B, C, N) format for VoteModule
+        return {
+            "fp_xyz": [xyz],
+            "fp_features": [features],
+            "fp_indices": [indices],
+        }

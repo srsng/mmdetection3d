@@ -2,6 +2,7 @@
 from mmdet.models.backbones import SSDVGG, HRNet, ResNet, ResNetV1d, ResNeXt
 
 from .cylinder3d import Asymm3DSpconv
+from .density_aware_pointnet2 import DensityAwarePointNet2
 from .dgcnn import DGCNNBackbone
 from .dla import DLANet
 from .mink_resnet import MinkResNet
@@ -17,5 +18,6 @@ __all__ = [
     'ResNet', 'ResNetV1d', 'ResNeXt', 'SSDVGG', 'HRNet', 'NoStemRegNet',
     'SECOND', 'DGCNNBackbone', 'PointNet2SASSG', 'PointNet2SAMSG',
     'MultiBackbone', 'DLANet', 'MinkResNet', 'Asymm3DSpconv',
-    'MinkUNetBackbone', 'SPVCNNBackbone', 'MinkUNetBackboneV2'
+    'MinkUNetBackbone', 'SPVCNNBackbone', 'MinkUNetBackboneV2',
+    'DensityAwarePointNet2'
 ]

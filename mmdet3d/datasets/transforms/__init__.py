@@ -10,7 +10,7 @@ from .loading import (LidarDet3DInferencerLoader, LoadAnnotations3D,
 from .test_time_aug import MultiScaleFlipAug3D
 # yapf: disable
 from .transforms_3d import (AffineResize, BackgroundPointsFilter,
-                            GlobalAlignment, GlobalRotScaleTrans,
+                            ComputePointDensity, GlobalAlignment, GlobalRotScaleTrans,
                             IndoorPatchPointSample, IndoorPointSample,
                             LaserMix, MultiViewWrapper, ObjectNameFilter,
                             ObjectNoise, ObjectRangeFilter, ObjectSample,
@@ -32,5 +32,5 @@ __all__ = [
     'RandomShiftScale', 'LoadPointsFromDict', 'Resize3D', 'RandomResize3D',
     'MultiViewWrapper', 'PhotoMetricDistortion3D', 'MonoDet3DInferencerLoader',
     'LidarDet3DInferencerLoader', 'PolarMix', 'LaserMix',
-    'MultiModalityDet3DInferencerLoader'
+    'MultiModalityDet3DInferencerLoader', 'ComputePointDensity'
 ]

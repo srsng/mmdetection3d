@@ -41,6 +41,10 @@ train_pipeline = [
         shift_height=True),
     dict(type='PointSample', num_points=20000),
     dict(
+        type='ComputePointDensity',
+        sigma=0.1,
+        k_neighbor=64),
+    dict(
         type='Pack3DDetInputs',
         keys=['points', 'gt_bboxes_3d', 'gt_labels_3d'])
 ]
@@ -68,7 +72,11 @@ test_pipeline = [
                 sync_2d=False,
                 flip_ratio_bev_horizontal=0.5,
             ),
-            dict(type='PointSample', num_points=20000)
+            dict(type='PointSample', num_points=20000),
+            dict(
+                type='ComputePointDensity',
+                sigma=0.1,
+                k_neighbor=64),
         ]),
     dict(type='Pack3DDetInputs', keys=['points'])
 ]
