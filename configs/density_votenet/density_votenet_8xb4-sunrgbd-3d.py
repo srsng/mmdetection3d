@@ -57,11 +57,13 @@ train_dataloader = dict(
 
 # Validation dataloader
 val_dataloader = dict(
+    batch_size=16,
     dataset=dict(
         data_root='data2/sunrgbd/'))
 
 # Test dataloader
 test_dataloader = dict(
+    batch_size=16,
     dataset=dict(
         data_root='data2/sunrgbd/'))
 

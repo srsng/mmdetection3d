@@ -45,18 +45,20 @@ model = dict(
 
 # Training dataloader
 train_dataloader = dict(
-    batch_size=4,
+    batch_size=16,
     dataset=dict(
         dataset=dict(
             data_root='data2/mini_sunrgbd/')))
 
 # Validation dataloader
 val_dataloader = dict(
+    batch_size=16,
     dataset=dict(
         data_root='data2/mini_sunrgbd/'))
 
 # Test dataloader
 test_dataloader = dict(
+    batch_size=16,
     dataset=dict(
         data_root='data2/mini_sunrgbd/'))
 
