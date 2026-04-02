@@ -45,20 +45,20 @@ model = dict(
 
 # Training dataloader
 train_dataloader = dict(
-    batch_size=16,
+    batch_size=20,
     dataset=dict(
         dataset=dict(
             data_root='data2/mini_sunrgbd/')))
 
 # Validation dataloader
 val_dataloader = dict(
-    batch_size=16,
+    batch_size=20,
     dataset=dict(
         data_root='data2/mini_sunrgbd/'))
 
 # Test dataloader
 test_dataloader = dict(
-    batch_size=16,
+    batch_size=20,
     dataset=dict(
         data_root='data2/mini_sunrgbd/'))
 
@@ -72,6 +72,10 @@ vis_backends = [
 ]
 visualizer = dict(
     type='Det3DLocalVisualizer', vis_backends=vis_backends, name='visualizer')
+
+default_hooks = dict(
+    checkpoint=dict(type='CheckpointHook', interval=3),
+)
 
 # Work directory
 work_dir = 'work_dirs/density_votenet_mini_sunrgbd'
