@@ -4,13 +4,14 @@ from typing import Dict, List, Optional, Sequence, Tuple
 import torch
 from torch import Tensor, nn
 
+from mmengine.model import BaseModule
 from mmdet3d.models.layers import PointFPModule, build_sa_module
 from mmdet3d.registry import MODELS
 from mmdet3d.utils import ConfigType, OptMultiConfig
 
 
 @MODELS.register_module()
-class DensityAwarePointNet2(nn.Module):
+class DensityAwarePointNet2(BaseModule):
     """Density-aware PointNet2 backbone with SA and FP modules.
 
     This backbone integrates density information into SA layers for
@@ -74,7 +75,7 @@ class DensityAwarePointNet2(nn.Module):
             normalize_xyz=True),
         init_cfg: OptMultiConfig = None
     ) -> None:
-        super().__init__()
+        super().__init__(init_cfg)
         self.num_sa = len(sa_channels)
         self.num_fp = len(fp_channels)
 

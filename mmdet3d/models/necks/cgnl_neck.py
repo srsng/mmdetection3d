@@ -7,11 +7,12 @@ import torch
 import torch.nn as nn
 import torch.nn.functional as F
 
+from mmengine.model import BaseModule
 from mmdet3d.registry import MODELS
 
 
 @MODELS.register_module()
-class CGNLBlock(nn.Module):
+class CGNLBlock(BaseModule):
     """Compact Generalized Non-Local Block for channel-wise local feature modeling.
 
     This block applies non-local attention with channel grouping and layer normalization
@@ -104,7 +105,7 @@ class CGNLBlock(nn.Module):
 
 
 @MODELS.register_module()
-class CGNLNeck(nn.Module):
+class CGNLNeck(BaseModule):
     """CGNL Neck module for MMDetection3D.
 
     Args:
@@ -177,7 +178,7 @@ class CGNLNeck(nn.Module):
 
 
 @MODELS.register_module()
-class VoteNetCGNLNeck(nn.Module):
+class VoteNetCGNLNeck(BaseModule):
     """CGNL Neck adapted for VoteNet backbone output.
 
     VoteNet's PointNet2SASSG backbone outputs a dictionary format:
@@ -289,7 +290,7 @@ class VoteNetCGNLNeck(nn.Module):
 
 
 @MODELS.register_module()
-class CGNLLocalFusionNeck(nn.Module):
+class CGNLLocalFusionNeck(BaseModule):
     """CGNL Local Fusion Neck for point cloud feature enhancement.
 
     This neck takes point cloud data with xyz + features (e.g., density-aware
