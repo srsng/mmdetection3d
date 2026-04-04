@@ -68,11 +68,14 @@ def parse_sunrgbd_label_line(line: str) -> dict:
         heading_angle = 0.0
 
     return {
-        'classname': parts[0],
-        'bbox': np.array([data[0], data[1], data[0] + data[3], data[2] + data[4]]),  # x1, y1, x2, y2
-        'center': np.array([data[4], data[5], data[6]]),  # cx, cy, cz
-        'size': np.array([data[8], data[7], data[9]]) * 2,  # length, width, height (x_size, y_size, z_size)
-        'heading_angle': heading_angle,
+        "classname": parts[0],
+        "bbox": np.array(
+            [data[0], data[1], data[0] + data[3], data[2] + data[4]]
+        ),  # x1, y1, x2, y2
+        "center": np.array([data[4], data[5], data[6]]),  # cx, cy, cz
+        "size": np.array([data[8], data[7], data[9]])
+        * 2,  # length, width, height (x_size, y_size, z_size)
+        "heading_angle": heading_angle,
     }
 
 
@@ -88,7 +91,7 @@ def clean_label_file(label_path: str) -> int:
     if not osp.exists(label_path):
         return 0
 
-    with open(label_path, 'r') as f:
+    with open(label_path, "r") as f:
         lines = f.readlines()
 
     valid_lines = []
@@ -101,7 +104,7 @@ def clean_label_file(label_path: str) -> int:
             removed_count += 1
 
     # 重写文件
-    with open(label_path, 'w') as f:
+    with open(label_path, "w") as f:
         f.writelines(valid_lines)
 
     return removed_count
@@ -119,25 +122,25 @@ def copy_mini_sunrgbd_files(src_root: Path, dst_root: Path, sample_ids: set) -> 
         统计信息字典
     """
     # 创建目录结构
-    (dst_root / 'points').mkdir(parents=True, exist_ok=True)
-    (dst_root / 'sunrgbd_trainval/image').mkdir(parents=True, exist_ok=True)
-    (dst_root / 'sunrgbd_trainval/calib').mkdir(parents=True, exist_ok=True)
-    (dst_root / 'sunrgbd_trainval/label').mkdir(parents=True, exist_ok=True)
+    (dst_root / "points").mkdir(parents=True, exist_ok=True)
+    (dst_root / "sunrgbd_trainval/image").mkdir(parents=True, exist_ok=True)
+    (dst_root / "sunrgbd_trainval/calib").mkdir(parents=True, exist_ok=True)
+    (dst_root / "sunrgbd_trainval/label").mkdir(parents=True, exist_ok=True)
 
     # 定义要复制的文件
     files_to_copy = [
-        ('points/{}.bin', 'points/{}.bin'),
-        ('sunrgbd_trainval/image/{}.jpg', 'sunrgbd_trainval/image/{}.jpg'),
-        ('sunrgbd_trainval/calib/{}.txt', 'sunrgbd_trainval/calib/{}.txt'),
-        ('sunrgbd_trainval/label/{}.txt', 'sunrgbd_trainval/label/{}.txt'),
+        ("points/{}.bin", "points/{}.bin"),
+        ("sunrgbd_trainval/image/{}.jpg", "sunrgbd_trainval/image/{}.jpg"),
+        ("sunrgbd_trainval/calib/{}.txt", "sunrgbd_trainval/calib/{}.txt"),
+        ("sunrgbd_trainval/label/{}.txt", "sunrgbd_trainval/label/{}.txt"),
     ]
 
     stats = {
-        'copied': 0,
-        'missing': 0,
-        'exist': 0,
-        'labels_cleaned': 0,
-        'labels_removed_lines': 0,
+        "copied": 0,
+        "missing": 0,
+        "exist": 0,
+        "labels_cleaned": 0,
+        "labels_removed_lines": 0,
     }
 
     for idx in sample_ids:
@@ -145,39 +148,41 @@ def copy_mini_sunrgbd_files(src_root: Path, dst_root: Path, sample_ids: set) -> 
             src = src_root / src_path.format(idx)
             dst = dst_root / dst_path.format(idx)
             if not str(dst).endswith(".txt") and dst.exists():
-                stats['exist'] += 1
+                stats["exist"] += 1
                 continue
             if src.exists():
                 shutil.copy2(src, dst)
-                stats['copied'] += 1
+                stats["copied"] += 1
             else:
-                stats['missing'] += 1
+                stats["missing"] += 1
 
         # 清洗 label 文件
-        label_file = dst_root / 'sunrgbd_trainval/label/{}.txt'.format(idx)
+        label_file = dst_root / "sunrgbd_trainval/label/{}.txt".format(idx)
         if label_file.exists():
             removed = clean_label_file(str(label_file))
             if removed > 0:
-                stats['labels_cleaned'] += 1
-                stats['labels_removed_lines'] += removed
+                stats["labels_cleaned"] += 1
+                stats["labels_removed_lines"] += removed
 
     return stats
 
 
 def create_instance_dict(parsed: dict, label: int, classname: str) -> dict:
     """创建实例字典，3D bbox 格式为 [cx, cy, cz, l, w, h, angle]。"""
-    size = parsed['size'].copy()
-    box3d = np.concatenate([
-        parsed['center'],      # cx, cy, cz
-        size,                  # l, w, h
-        np.array([parsed['heading_angle']])  # angle
-    ])
+    size = parsed["size"].copy()
+    box3d = np.concatenate(
+        [
+            parsed["center"],  # cx, cy, cz
+            size,  # l, w, h
+            np.array([parsed["heading_angle"]]),  # angle
+        ]
+    )
     return {
-        'bbox': parsed['bbox'],          # 2D bbox [x1, y1, x2, y2]
-        'bbox_label': label,             # 2D 标签（与 3D 相同）
-        'bbox_3d': box3d.astype(np.float32),  # 3D bbox [cx, cy, cz, l, w, h, angle]
-        'bbox_label_3d': label,          # 3D 标签（MiniSUNRGBD 索引 0-7）
-        'class_name': classname,         # 原始类别名称
+        "bbox": parsed["bbox"],  # 2D bbox [x1, y1, x2, y2]
+        "bbox_label": label,  # 2D 标签（与 3D 相同）
+        "bbox_3d": box3d.astype(np.float32),  # 3D bbox [cx, cy, cz, l, w, h, angle]
+        "bbox_label_3d": label,  # 3D 标签（MiniSUNRGBD 索引 0-7）
+        "class_name": classname,  # 原始类别名称
     }
 
 
