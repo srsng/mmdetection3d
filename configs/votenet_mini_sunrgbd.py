@@ -9,7 +9,7 @@ _base_ = [
 ]
 
 # Model settings - 5 classes for MiniSUNRGBD
-# Classes: keyboard(0), laptop(1), book(2), cup(3), mug(4)
+# Classes: book(0), cup(1), keyboard(2), laptop(3), mug(4)
 model = dict(
     bbox_head=dict(
         num_classes=5,
@@ -22,11 +22,11 @@ model = dict(
             # Format: [length, width, height] in meters
             # From actual computed mean_sizes
             mean_sizes=[
-                [0.208, 0.504, 0.116],  # keyboard (0)
-                [0.357, 0.411, 0.228],  # laptop (1)
-                [0.255, 0.272, 0.112],  # book (2)
-                [0.130, 0.131, 0.152],  # cup (3)
-                [0.138, 0.128, 0.143],  # mug (4)
+                [0.255140, 0.272017, 0.111679],  # book (0)
+                [0.129553, 0.131255, 0.151869],  # cup (1)
+                [0.208131, 0.504047, 0.115639],  # keyboard (2)
+                [0.356808, 0.411205, 0.228216],  # laptop (3)
+                [0.138085, 0.127501, 0.143335],  # mug (4)
             ],
         ),
     )

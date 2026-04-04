@@ -3,7 +3,7 @@
 
 dataset_type = "MiniSUNRGBDDataset"
 data_root = "data2/mini_sunrgbd/"
-class_names = ('keyboard', 'laptop', 'book', 'cup', 'mug')
+class_names = ("book", "cup", "keyboard", "laptop", "mug")
 
 metainfo = dict(classes=class_names)
 

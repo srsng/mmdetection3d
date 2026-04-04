@@ -23,12 +23,12 @@ class MiniSUNRGBDDataset(Det3DDataset):
     METAINFO = {
         "classes": ("book", "cup", "keyboard", "laptop", "mug"),
         "palette": [
-            (230, 25, 72),    # keyboard - red
-            (60, 180, 75),    # laptop - green
-            (255, 225, 25),   # book - yellow
-            (0, 130, 200),    # cup - blue
-            (245, 130, 48),   # mug - orange
-        ]
+            (255, 225, 25),  # book - yellow
+            (0, 130, 200),  # cup - blue
+            (230, 25, 72),  # keyboard - red
+            (60, 180, 75),  # laptop - green
+            (245, 130, 48),  # mug - orange
+        ],
     }
 
     def __init__(
