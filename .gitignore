@@ -144,3 +144,6 @@ mmdet3d/evaluation/functional/waymo_utils/compute_segmentation_metrics_main
 # BMad Method V6
 _bmad/
 _bmad-output/
+_bmad-trash/
+
+3rdparty/
