@@ -640,6 +640,162 @@ def update_s3dis_infos(pkl_path, out_dir):
     mmengine.dump(converted_data_info, out_path, "pkl")
 
 
+def update_toscene_infos(pkl_path, out_dir):
+    """Convert TO-Scene dataset info to V2 format.
+
+    TO-Scene has 70 classes with integer class indices in 'class' field,
+    different from ScanNet which uses string names.
+
+    Args:
+        pkl_path (str): Path to the original pkl file.
+        out_dir (str): Output directory for the converted pkl file.
+    """
+    print(f"{pkl_path} will be modified.")
+    if out_dir in pkl_path:
+        print(f"Warning, you may overwriting the original data {pkl_path}.")
+        time.sleep(5)
+    METAINFO = {
+        "classes": (
+            "cabinet",
+            "bed",
+            "chair",
+            "sofa",
+            "table",
+            "door",
+            "window",
+            "bookshelf",
+            "picture",
+            "counter",
+            "desk",
+            "curtain",
+            "refrigerator",
+            "showercurtrain",
+            "toilet",
+            "sink",
+            "bathtub",
+            "garbagebin",
+            "bag",
+            "bottle",
+            "bowl",
+            "camera",
+            "can",
+            "cap",
+            "clock",
+            "keyboard",
+            "display",
+            "earphone",
+            "jar",
+            "knife",
+            "lamp",
+            "laptop",
+            "microphone",
+            "microwave",
+            "mug",
+            "printer",
+            "remote control",
+            "phone",
+            "alarm",
+            "book",
+            "cake",
+            "calculator",
+            "candle",
+            "charger",
+            "chessboard",
+            "coffee_machine",
+            "comb",
+            "cutting_board",
+            "dishes",
+            "doll",
+            "eraser",
+            "eye_glasses",
+            "file_box",
+            "fork",
+            "fruit",
+            "globe",
+            "hat",
+            "mirror",
+            "notebook",
+            "pencil",
+            "plant",
+            "plate",
+            "radio",
+            "ruler",
+            "saucepan",
+            "spoon",
+            "tea_pot",
+            "toaster",
+            "vase",
+            "vegetables",
+        )
+    }
+    print(f"Reading from input file: {pkl_path}.")
+    data_list = mmengine.load(pkl_path)
+    print("Start updating:")
+    converted_list = []
+    for ori_info_dict in mmengine.track_iter_progress(data_list):
+        temp_data_info = get_empty_standard_data_info()
+        temp_data_info["lidar_points"]["num_pts_feats"] = ori_info_dict["point_cloud"][
+            "num_features"
+        ]
+        temp_data_info["lidar_points"]["lidar_path"] = Path(
+            ori_info_dict["pts_path"]
+        ).name
+        if "pts_semantic_mask_path" in ori_info_dict:
+            temp_data_info["pts_semantic_mask_path"] = Path(
+                ori_info_dict["pts_semantic_mask_path"]
+            ).name
+        if "pts_instance_mask_path" in ori_info_dict:
+            temp_data_info["pts_instance_mask_path"] = Path(
+                ori_info_dict["pts_instance_mask_path"]
+            ).name
+
+        anns = ori_info_dict.get("annos", None)
+        ignore_class_name = set()
+        if anns is not None:
+            temp_data_info["axis_align_matrix"] = anns["axis_align_matrix"].tolist()
+            if anns["gt_num"] == 0:
+                instance_list = []
+            else:
+                num_instances = len(anns["class"])
+                instance_list = []
+                for instance_id in range(num_instances):
+                    empty_instance = get_empty_instance()
+                    empty_instance["bbox_3d"] = anns["gt_boxes_upright_depth"][
+                        instance_id
+                    ].tolist()
+
+                    # TO-Scene uses integer class indices directly
+                    class_id = anns["class"][instance_id]
+                    if class_id < len(METAINFO["classes"]):
+                        empty_instance["bbox_label_3d"] = int(class_id)
+                    else:
+                        ignore_class_name.add(f"class_id_{class_id}")
+                        empty_instance["bbox_label_3d"] = -1
+
+                    empty_instance = clear_instance_unused_keys(empty_instance)
+                    instance_list.append(empty_instance)
+            temp_data_info["instances"] = instance_list
+        temp_data_info, _ = clear_data_info_unused_keys(temp_data_info)
+        converted_list.append(temp_data_info)
+    pkl_name = Path(pkl_path).name
+    out_path = osp.join(out_dir, pkl_name)
+    print(f"Writing to output file: {out_path}.")
+    print(f"ignore classes: {ignore_class_name}")
+
+    # dataset metainfo
+    metainfo = dict()
+    metainfo["categories"] = {k: i for i, k in enumerate(METAINFO["classes"])}
+    if ignore_class_name:
+        for ignore_class in ignore_class_name:
+            metainfo["categories"][ignore_class] = -1
+    metainfo["dataset"] = "toscene"
+    metainfo["info_version"] = "1.1"
+
+    converted_data_info = dict(metainfo=metainfo, data_list=converted_list)
+
+    mmengine.dump(converted_data_info, out_path, "pkl")
+
+
 def update_scannet_infos(pkl_path, out_dir):
     print(f"{pkl_path} will be modified.")
     if out_dir in pkl_path:
@@ -1229,6 +1385,8 @@ def update_pkl_infos(dataset, out_dir, pkl_path):
         update_waymo_infos(pkl_path=pkl_path, out_dir=out_dir)
     elif dataset.lower() == "scannet":
         update_scannet_infos(pkl_path=pkl_path, out_dir=out_dir)
+    elif dataset.lower() == "toscene":
+        update_toscene_infos(pkl_path=pkl_path, out_dir=out_dir)
     elif dataset.lower() == "sunrgbd":
         update_sunrgbd_infos(pkl_path=pkl_path, out_dir=out_dir)
     elif dataset.lower() == "lyft":

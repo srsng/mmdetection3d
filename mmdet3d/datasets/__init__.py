@@ -4,14 +4,20 @@ from .det3d_dataset import Det3DDataset
 from .kitti_dataset import KittiDataset
 from .lyft_dataset import LyftDataset
 from .nuscenes_dataset import NuScenesDataset
+
 # yapf: enable
 from .s3dis_dataset import S3DISDataset, S3DISSegDataset
-from .scannet_dataset import (ScanNetDataset, ScanNetInstanceSegDataset,
-                              ScanNetSegDataset)
+from .scannet_dataset import (
+    ScanNetDataset,
+    ScanNetInstanceSegDataset,
+    ScanNetSegDataset,
+)
 from .seg3d_dataset import Seg3DDataset
 from .semantickitti_dataset import SemanticKittiDataset
 from .sunrgbd_dataset import SUNRGBDDataset
 from .mini_sunrgbd_dataset import MiniSUNRGBDDataset
+from .toscene_dataset import TOSceneDataset
+
 # yapf: disable
 from .transforms import (AffineResize, BackgroundPointsFilter, GlobalAlignment,
                          GlobalRotScaleTrans, IndoorPatchPointSample,
@@ -33,7 +39,7 @@ __all__ = [
     'LoadPointsFromFile', 'S3DISSegDataset', 'S3DISDataset',
     'NormalizePointsColor', 'IndoorPatchPointSample', 'IndoorPointSample',
     'PointSample', 'LoadAnnotations3D', 'GlobalAlignment', 'SUNRGBDDataset',
-    'MiniSUNRGBDDataset',
+    'MiniSUNRGBDDataset', 'TOSceneDataset',
     'ScanNetDataset', 'ScanNetSegDataset', 'ScanNetInstanceSegDataset',
     'SemanticKittiDataset', 'Det3DDataset', 'Seg3DDataset',
     'LoadPointsFromMultiSweeps', 'WaymoDataset', 'BackgroundPointsFilter',
