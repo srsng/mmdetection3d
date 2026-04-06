@@ -108,7 +108,7 @@ model = dict(
     ),
 )
 
-auto_scale_lr = dict(enable=True, base_batch_size=32)
+auto_scale_lr = dict(enable=True, base_batch_size=16)
 
 vis_backends = [dict(type="LocalVisBackend"), dict(type="TensorboardVisBackend")]
 visualizer = dict(

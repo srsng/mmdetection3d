@@ -99,7 +99,7 @@ train_pipeline = [
         backend_args=backend_args,
     ),
     dict(type="GlobalAlignment", rotation_axis=2),
-    # Compute point cloud density for Density-aware PointNet2
+    dict(type="PointSample", num_points=20000),
     dict(
         type="ComputePointDensity",
         kernel="gaussian",
@@ -107,7 +107,6 @@ train_pipeline = [
         k_neighbor=64,
         epsilon=1e-10,
     ),
-    dict(type="PointSample", num_points=40000),
     dict(
         type="RandomFlip3D",
         sync_2d=False,
@@ -141,14 +140,6 @@ test_pipeline = [
         backend_args=backend_args,
     ),
     dict(type="GlobalAlignment", rotation_axis=2),
-    # Compute point cloud density for Density-aware PointNet2
-    dict(
-        type="ComputePointDensity",
-        kernel="gaussian",
-        sigma=0.1,
-        k_neighbor=64,
-        epsilon=1e-10,
-    ),
     dict(
         type="MultiScaleFlipAug3D",
         img_scale=(1333, 800),
@@ -167,14 +158,21 @@ test_pipeline = [
                 flip_ratio_bev_horizontal=0.5,
                 flip_ratio_bev_vertical=0.5,
             ),
-            dict(type="PointSample", num_points=40000),
+            dict(type="PointSample", num_points=20000),
+            dict(
+                type="ComputePointDensity",
+                kernel="gaussian",
+                sigma=0.1,
+                k_neighbor=64,
+                epsilon=1e-10,
+            ),
         ],
     ),
     dict(type="Pack3DDetInputs", keys=["points"]),
 ]
 
 train_dataloader = dict(
-    batch_size=32,
+    batch_size=16,
     num_workers=4,
     sampler=dict(type="DefaultSampler", shuffle=True),
     dataset=dict(
@@ -194,7 +192,7 @@ train_dataloader = dict(
 )
 
 val_dataloader = dict(
-    batch_size=32,
+    batch_size=16,
     num_workers=4,
     sampler=dict(type="DefaultSampler", shuffle=False),
     dataset=dict(
