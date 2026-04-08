@@ -1112,8 +1112,8 @@ class GroupFree3DHead(BaseModule):
         results_list = list()
         if use_nms:
             batch_size = bbox3d.shape[0]
-            temp_results = InstanceData()
             for b in range(batch_size):
+                temp_results = InstanceData()
                 bbox_selected, score_selected, labels = self.multiclass_nms_single(
                     obj_scores[b],
                     sem_scores[b],
