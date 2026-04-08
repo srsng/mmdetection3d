@@ -316,8 +316,8 @@ train_dataloader = dict(
 )
 
 val_dataloader = dict(
-    batch_size=1,
-    num_workers=1,
+    batch_size=4,
+    num_workers=4,
     sampler=dict(type="DefaultSampler", shuffle=False),
     dataset=dict(
         type="TOSceneDataset",
@@ -359,8 +359,8 @@ param_scheduler = [
         begin=0,
         end=80,
         by_epoch=True,
-        milestones=[56, 68],
-        gamma=0.1,
+        milestones=[44, 56, 68],
+        gamma=0.2,
     )
 ]
 
