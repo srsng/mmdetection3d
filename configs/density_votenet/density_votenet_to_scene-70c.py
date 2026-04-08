@@ -114,5 +114,9 @@ vis_backends = [dict(type="LocalVisBackend"), dict(type="TensorboardVisBackend")
 visualizer = dict(
     type="Det3DLocalVisualizer", vis_backends=vis_backends, name="visualizer"
 )
+default_hooks = dict(
+    checkpoint=dict(type="CheckpointHook", interval=1),
+    logger=dict(type="LoggerHook", interval=30),
+)
 
 work_dir = "work_dirs/density_votenet_to_scene"
